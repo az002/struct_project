@@ -20,7 +20,7 @@ from boltz.data.parse.fasta import parse_fasta
 from boltz.data.parse.yaml import parse_yaml
 from boltz.data.types import MSA, Manifest, Record
 from boltz.data.write.writer import BoltzWriter
-from boltz.model.model import Boltz1
+from .model.model import Boltz1
 
 @dataclass
 class BoltzProcessedInput:
@@ -478,7 +478,7 @@ def predict(
         "recycling_steps": recycling_steps,
         "sampling_steps": sampling_steps,
         "diffusion_samples": diffusion_samples,
-        "write_confidence_summary": True,
+        "write_confidence_summary": False,
         "write_full_pae": write_full_pae,
         "write_full_pde": write_full_pde,
     }
@@ -506,9 +506,10 @@ def predict(
     predictions = trainer.predict(
         model_module,
         datamodule=data_module,
-        return_predictions=False,
+        return_predictions=True,
     )
 
+    print(predictions[0]['s'].shape)
 
 if __name__ == "__main__":
-    predict("sod1.fa", "./", cache=Path("."), use_msa_server=True)
+    predict("sod1.fa", "./boltz", cache=Path("./boltz"), use_msa_server=True)
