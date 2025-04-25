@@ -258,8 +258,10 @@ class Boltz1(LightningModule):
         multiplicity_diffusion_train: int = 1,
         diffusion_samples: int = 1,
         run_confidence_sequentially: bool = False,
+        embed_only:bool = True,
     ) -> dict[str, Tensor]:
-        # dict_out = {}
+        dict_out = {}
+
         # Compute input embeddings
         with torch.set_grad_enabled(
             self.training and self.structure_prediction_training
@@ -309,59 +311,59 @@ class Boltz1(LightningModule):
                         pairformer_module = self.pairformer_module
 
                     s, z = pairformer_module(s, z, mask=mask, pair_mask=pair_mask)
+            if embed_only:
+                return {'s' : s, 'z' : z, 's_inputs': s_inputs}
+            pdistogram = self.distogram_module(z)
+            dict_out = {"pdistogram": pdistogram}
+        # Compute structure module
+        if self.training and self.structure_prediction_training:
+            dict_out.update(
+                self.structure_module(
+                    s_trunk=s,
+                    z_trunk=z,
+                    s_inputs=s_inputs,
+                    feats=feats,
+                    relative_position_encoding=relative_position_encoding,
+                    multiplicity=multiplicity_diffusion_train,
+                )
+            )
 
-            # pdistogram = self.distogram_module(z)
-            # dict_out = {"pdistogram": pdistogram}
-        return {'s' : s, 'z' : z, 's_inputs' : s_inputs, 'feats':feats}
-        # # Compute structure module
-        # if self.training and self.structure_prediction_training:
-        #     dict_out.update(
-        #         self.structure_module(
-        #             s_trunk=s,
-        #             z_trunk=z,
-        #             s_inputs=s_inputs,
-        #             feats=feats,
-        #             relative_position_encoding=relative_position_encoding,
-        #             multiplicity=multiplicity_diffusion_train,
-        #         )
-        #     )
-
-        # if (not self.training) or self.confidence_prediction:
-        #     dict_out.update(
-        #         self.structure_module.sample(
-        #             s_trunk=s,
-        #             z_trunk=z,
-        #             s_inputs=s_inputs,
-        #             feats=feats,
-        #             relative_position_encoding=relative_position_encoding,
-        #             num_sampling_steps=num_sampling_steps,
-        #             atom_mask=feats["atom_pad_mask"],
-        #             multiplicity=diffusion_samples,
-        #             train_accumulate_token_repr=self.training,
-        #         )
-        #     )
+        if (not self.training) or self.confidence_prediction:
+            dict_out.update(
+                self.structure_module.sample(
+                    s_trunk=s,
+                    z_trunk=z,
+                    s_inputs=s_inputs,
+                    feats=feats,
+                    relative_position_encoding=relative_position_encoding,
+                    num_sampling_steps=num_sampling_steps,
+                    atom_mask=feats["atom_pad_mask"],
+                    multiplicity=diffusion_samples,
+                    train_accumulate_token_repr=self.training,
+                )
+            )
         
-        # if self.confidence_prediction:
-        #     dict_out.update(
-        #         self.confidence_module(
-        #             s_inputs=s_inputs.detach(),
-        #             s=s.detach(),
-        #             z=z.detach(),
-        #             s_diffusion=(
-        #                 dict_out["diff_token_repr"]
-        #                 if self.confidence_module.use_s_diffusion
-        #                 else None
-        #             ),
-        #             x_pred=dict_out["sample_atom_coords"].detach(),
-        #             feats=feats,
-        #             pred_distogram_logits=dict_out["pdistogram"].detach(),
-        #             multiplicity=diffusion_samples,
-        #             run_sequentially=run_confidence_sequentially,
-        #         )
-        #     )
-        # if self.confidence_prediction and self.confidence_module.use_s_diffusion:
-        #     dict_out.pop("diff_token_repr", None)
-        # return dict_out
+        if self.confidence_prediction:
+            dict_out.update(
+                self.confidence_module(
+                    s_inputs=s_inputs.detach(),
+                    s=s.detach(),
+                    z=z.detach(),
+                    s_diffusion=(
+                        dict_out["diff_token_repr"]
+                        if self.confidence_module.use_s_diffusion
+                        else None
+                    ),
+                    x_pred=dict_out["sample_atom_coords"].detach(),
+                    feats=feats,
+                    pred_distogram_logits=dict_out["pdistogram"].detach(),
+                    multiplicity=diffusion_samples,
+                    run_sequentially=run_confidence_sequentially,
+                )
+            )
+        if self.confidence_prediction and self.confidence_module.use_s_diffusion:
+            dict_out.pop("diff_token_repr", None)
+        return dict_out
 
     def get_true_coordinates(
         self,
@@ -1122,38 +1124,38 @@ class Boltz1(LightningModule):
                 num_sampling_steps=self.predict_args["sampling_steps"],
                 diffusion_samples=self.predict_args["diffusion_samples"],
                 run_confidence_sequentially=True,
+                embed_only=self.predict_args["embed_only"],
             )
-            output = dict()
-            for key in ['s','z','s_inputs']:
-                output[key] = out[key]
-            return output
 
-            # pred_dict = {"exception": False}
-            # pred_dict["masks"] = batch["atom_pad_mask"]
-            # pred_dict["coords"] = out["sample_atom_coords"]
-            # if self.predict_args.get("write_confidence_summary", True):
-            #     pred_dict["confidence_score"] = (
-            #         4 * out["complex_plddt"] +
-            #         (out["iptm"] if not torch.allclose(out["iptm"], torch.zeros_like(out["iptm"])) else out["ptm"])
-            #     ) / 5
-            #     for key in [
-            #         "ptm",
-            #         "iptm",
-            #         "ligand_iptm",
-            #         "protein_iptm",
-            #         "pair_chains_iptm",
-            #         "complex_plddt",
-            #         "complex_iplddt",
-            #         "complex_pde",
-            #         "complex_ipde",
-            #         "plddt",
-            #     ]:
-            #         pred_dict[key] = out[key]
-            # if self.predict_args.get("write_full_pae", True):
-            #     pred_dict["pae"] = out["pae"]
-            # if self.predict_args.get("write_full_pde", False):
-            #     pred_dict["pde"] = out["pde"]
-            # return pred_dict
+            if self.predict_args['embed_only']:
+                return out
+
+            pred_dict = {"exception": False}
+            pred_dict["masks"] = batch["atom_pad_mask"]
+            pred_dict["coords"] = out["sample_atom_coords"]
+            if self.predict_args.get("write_confidence_summary", True):
+                pred_dict["confidence_score"] = (
+                    4 * out["complex_plddt"] +
+                    (out["iptm"] if not torch.allclose(out["iptm"], torch.zeros_like(out["iptm"])) else out["ptm"])
+                ) / 5
+                for key in [
+                    "ptm",
+                    "iptm",
+                    "ligand_iptm",
+                    "protein_iptm",
+                    "pair_chains_iptm",
+                    "complex_plddt",
+                    "complex_iplddt",
+                    "complex_pde",
+                    "complex_ipde",
+                    "plddt",
+                ]:
+                    pred_dict[key] = out[key]
+            if self.predict_args.get("write_full_pae", True):
+                pred_dict["pae"] = out["pae"]
+            if self.predict_args.get("write_full_pde", False):
+                pred_dict["pde"] = out["pde"]
+            return pred_dict
 
         except RuntimeError as e:  # catch out of memory exceptions
             if "out of memory" in str(e):

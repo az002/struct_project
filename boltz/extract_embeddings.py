@@ -386,7 +386,7 @@ def predict(
     checkpoint: Optional[str] = None,
     devices: int = 1,
     accelerator: str = "gpu",
-    recycling_steps: int = 3,
+    recycling_steps: int = 1,
     sampling_steps: int = 200,
     diffusion_samples: int = 1,
     step_scale: float = 1.638,
@@ -475,12 +475,14 @@ def predict(
     checkpoint = cache / "boltz1_conf.ckpt"
 
     predict_args = {
+        "embed_only" : True,
         "recycling_steps": recycling_steps,
         "sampling_steps": sampling_steps,
         "diffusion_samples": diffusion_samples,
         "write_confidence_summary": False,
-        "write_full_pae": write_full_pae,
-        "write_full_pde": write_full_pde,
+        "write_full_pae": False,
+        "write_full_pde": False,
+
     }
     diffusion_params = BoltzDiffusionParams()
     diffusion_params.step_scale = step_scale
@@ -510,6 +512,8 @@ def predict(
     )
 
     print(predictions[0]['s'].shape)
+    print(predictions[0]['z'].shape)
+    print(predictions[0]['s_inputs'].shape)
 
 if __name__ == "__main__":
-    predict("sod1.fa", "./boltz", cache=Path("./boltz"), use_msa_server=True)
+    predict("boltz/mthfr.fa", "./boltz", cache=Path("./boltz"), use_msa_server=True)
