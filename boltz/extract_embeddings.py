@@ -21,6 +21,7 @@ from boltz.data.parse.yaml import parse_yaml
 from boltz.data.types import MSA, Manifest, Record
 from boltz.data.write.writer import BoltzWriter
 from .model.model import Boltz1
+import numpy as np 
 
 @dataclass
 class BoltzProcessedInput:
@@ -515,5 +516,29 @@ def predict(
     print(predictions[0]['z'].shape)
     print(predictions[0]['s_inputs'].shape)
 
+def csv_to_maskedarray(df,score_name,protein_length):
+  '''take in a pandas dataframe and place scores in a masked array'''
+
+  scores_to_putinarray = df[[f'{score_name}','pos_aminoacid','alt_aminoacid']].to_numpy()
+  score_array = np.ones((22,protein_length+1))*99999 # +1 because some maps have a termination mutations
+  for score in scores_to_putinarray:
+    col = int(score[1])-1
+    row = int(score[2])-1
+    score_array[row,col] = score[0]
+  score_array_masked = np.ma.masked_values(score_array,99999)
+  return score_array_masked
+
+def csv_to_mask_overlay(df,protein_length):
+  '''take in a pandas dataframe and return a mask array with 0 at the missing aa positions'''
+
+  scores_to_putinarray = df[['score','pos_aminoacid','aaalt_num']].to_numpy()
+  score_array = np.zeros((22,protein_length+1)) # +1 because some maps have a termination mutations
+  for score in scores_to_putinarray:
+    col = int(score[1]-1)
+    row = int(score[2]-1)
+    score_array[row,col] = 1
+
+  return score_array
+
 if __name__ == "__main__":
-    predict("boltz/mthfr.fa", "./boltz", cache=Path("./boltz"), use_msa_server=True)
+    predict("mthfr_seq.fasta", "./boltz", cache=Path("./boltz"), use_msa_server=True)
